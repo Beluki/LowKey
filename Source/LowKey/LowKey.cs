@@ -37,16 +37,16 @@ namespace LowKey
         /// <summary>
         /// Information about the current hotkey pressed.
         /// </summary>
+        /// <param name="name">
+        /// Hotkey name.
+        /// </param>
         /// <param name="key">
         /// Base key that was pressed when the event was fired.
         /// </param>
         /// <param name="modifiers">
         /// Modifiers pressed.
         /// </param>
-        /// <param name="name">
-        /// Hotkey name or null when no name.
-        /// </param>
-        public KeyboardHookEventArgs(Keys key, Keys modifiers, String name)
+        public KeyboardHookEventArgs(String name, Keys key, Keys modifiers)
         {
             Key = key;
             Modifiers = modifiers;
@@ -63,9 +63,15 @@ namespace LowKey
         /// Events
         ///
 
-        public static event EventHandler<KeyboardHookEventArgs> HotkeyUp = null;
-        public static event EventHandler<KeyboardHookEventArgs> HotkeyDown = null;
+        /// <summary>
+        /// Fired when a registered hotkey is released.
+        /// </summary>
+        public static event EventHandler<KeyboardHookEventArgs> HotkeyUp;
 
+        /// <summary>
+        /// Fired when a registered hotkey is pressed.
+        /// </summary>
+        public static event EventHandler<KeyboardHookEventArgs> HotkeyDown;
 
         ///
         /// Helpers
@@ -80,7 +86,7 @@ namespace LowKey
         }
 
         /// <summary>
-        /// Determine which modifiers (Control, Alt, Shift)
+        /// Determine which modifiers (Keys.Alt, Keys.Control, Keys.Shift)
         /// are currently pressed.
         /// </summary>
         private static Keys PressedModifiers
@@ -130,14 +136,10 @@ namespace LowKey
         }
 
         /// <summary>
-        /// All the currently hooked hotkeys.
+        /// Virtual key code -> set of modifiers for all the hooked hotkeys.
         /// </summary>
-        private static HashSet<Hotkey> hotkeys = new HashSet<Hotkey>();
-
-        /// <summary>
-        /// Virtual key codes for all the hooked hotkeys.
-        /// </summary>
-        private static HashSet<Int32> hotkeysVkCodes = new HashSet<Int32>();
+        private static Dictionary<Int32, HashSet<Keys>> hotkeys = 
+            new Dictionary<Int32, HashSet<Keys>>();
 
         /// <summary>
         /// A map from hotkeys to names.
@@ -146,17 +148,17 @@ namespace LowKey
             new Dictionary<Hotkey, String>();
 
         /// <summary>
+        /// A map from names to hotkeys.
+        /// </summary>
+        private static Dictionary<String, Hotkey> namesToHotkeys =
+            new Dictionary<String, Hotkey>();
+
+        /// <summary>
         /// A map from hotkeys to a boolean indicating whether
         /// we should forward the keypress to further applications.
         /// </summary>
         private static Dictionary<Hotkey, Boolean> hotkeysForward =
             new Dictionary<Hotkey, Boolean>();
-
-        /// <summary>
-        /// A map from names to hotkeys.
-        /// </summary>
-        private static Dictionary<String, Hotkey> namesToHotkeys =
-            new Dictionary<String, Hotkey>();
 
         /// <summary>
         /// Hook ID.
@@ -168,68 +170,6 @@ namespace LowKey
         /// Needed to avoid the delegate being garbage-collected.
         /// </summary>
         private static HOOKPROC hookedCallback = Callback;
-
-        /// <summary>
-        /// Add a hotkey to the hooker.
-        /// </summary>
-        /// <param name="key">
-        /// Base key that should be pressed to fire an event.
-        /// </param>
-        /// <param name="modifiers">
-        /// A bitwise combination of additional modifiers
-        /// e.g: Keys.Control | Keys.Alt.
-        /// </param>
-        /// <param name="forward">
-        /// Whether the keypress should be forwarded to
-        /// other applications.
-        /// </param>
-        private static Hotkey InternalAddHotkey(Keys key, Keys modifiers, Boolean forward)
-        {
-            Hotkey hotkey = new Hotkey(key, modifiers);
-            Int32 vkCode = (Int32) key;
-
-            // provide a more detailed error message in this case:
-            if (hotkeysToNames.ContainsKey(hotkey))
-            {
-                throw new KeyboardHookException(
-                    String.Format(
-                        "A named hotkey: {} exists with the same key/modifiers.",
-                        hotkeysToNames[hotkey]
-                    )
-                );
-            }
-
-            if (hotkeys.Contains(hotkey))
-            {
-                throw new KeyboardHookException("Hotkey already hooked.");
-            }
-
-            // add it to the three dicts:
-            hotkeys.Add(hotkey);
-            hotkeysVkCodes.Add(vkCode);
-            hotkeysForward.Add(hotkey, forward);
-
-            return hotkey;
-        }
-
-        /// <summary>
-        /// Add a hotkey to the hooker.
-        /// </summary>
-        /// <param name="key">
-        /// Base key that should be pressed to fire an event.
-        /// </param>
-        /// <param name="modifiers">
-        /// A bitwise combination of additional modifiers
-        /// e.g: Keys.Control | Keys.Alt.
-        /// </param>
-        /// <param name="forward">
-        /// Whether the keypress should be forwarded to
-        /// other applications.
-        /// </param>
-        public static void AddHotkey(Keys key, Keys modifiers = Keys.None, Boolean forward = false)
-        {
-            InternalAddHotkey(key, modifiers, forward);
-        }
 
         /// <summary>
         /// Add a named hotkey to the hooker.
@@ -248,77 +188,80 @@ namespace LowKey
         /// Whether the keypress should be forwarded to
         /// other applications.
         /// </param>
-        public static void AddHotkey(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
+        private static void AddHotkey(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
         {
-            // check the name:
+            // check name:
             if (name == null)
-            {
                 throw new KeyboardHookException("Invalid hotkey name.");
-            }
+
             if (namesToHotkeys.ContainsKey(name))
+                throw new KeyboardHookException(
+                    String.Format("Hotkey name already registered: {0}.", name)
+                );
+
+            // check key code and modifiers:
+            Int32 vkCode = (Int32) key;
+
+            // known hotkey:
+            if (hotkeys.ContainsKey(vkCode))
             {
-                throw new KeyboardHookException("Hotkey name already taken.");
+                HashSet<Keys> currentModifiers = hotkeys[vkCode];
+
+                // check that modifiers are new:
+                if (currentModifiers.Contains(modifiers))
+                {
+                    Hotkey previous = new Hotkey(key, modifiers);
+                    throw new KeyboardHookException(
+                        String.Format("Hotkey: {0} already registered as: {1}.",
+                            name,
+                            hotkeysToNames[previous]
+                        )
+                    );
+                }
+
+                currentModifiers.Add(modifiers);
+            }
+            // new key:
+            else
+            {
+                hotkeys[vkCode] = new HashSet<Keys>() { modifiers };
             }
 
-            Hotkey hotkey = InternalAddHotkey(key, modifiers, forward);
+            // add it to the lookup dicts:
+            Hotkey hotkey = new Hotkey(key, modifiers);
 
-            namesToHotkeys.Add(name, hotkey);
-            hotkeysToNames.Add(hotkey, name);
+            hotkeysToNames[hotkey] = name;
+            namesToHotkeys[name] = hotkey;
+            hotkeysForward[hotkey] = forward;
         }
 
         /// <summary>
         /// Remove a hotkey from the hooker.
         /// </summary>
-        /// <param name="key">
-        /// Base key.
-        /// </param>
-        /// <param name="modifiers">
-        /// A bitwise combination of additional modifiers
-        /// e.g: Keys.Control | Keys.Alt.
-        /// </param>
-        public static void RemoveHotkey(Keys key, Keys modifiers = Keys.None)
-        {
-            Hotkey hotkey = new Hotkey(key, modifiers);
-            Int32 vkCode = (Int32) key;
-
-            if (!hotkeys.Contains(hotkey))
-            {
-                throw new KeyboardHookException("Hotkey not currently hooked.");
-            }
-
-            hotkeys.Remove(hotkey);
-            hotkeysVkCodes.Remove(vkCode);
-            hotkeysForward.Remove(hotkey);
-
-            // remove from both lookup dicts if present too:
-            if (hotkeysToNames.ContainsKey(hotkey))
-            {
-                String name = hotkeysToNames[hotkey];
-                hotkeysToNames.Remove(hotkey);
-                namesToHotkeys.Remove(name);
-            }
-        }
-
-        /// <summary>
-        /// Remove a named hotkey from the hooker.
-        /// </summary>
         /// <param name="name">
-        /// Hotkey name that was specified when calling AddHotkey().
+        /// Hotkey name that was specified when calling Add().
         /// </param>
         public static void RemoveHotkey(String name)
         {
             // check the name:
             if (name == null)
-            {
                 throw new KeyboardHookException("Invalid hotkey name.");
-            }
+
             if (!namesToHotkeys.ContainsKey(name))
-            {
-                throw new KeyboardHookException("Unknown hotkey name.");
-            }
+                throw new KeyboardHookException(
+                    String.Format("Unknown hotkey name: {0}.", name)
+                );
 
             Hotkey hotkey = namesToHotkeys[name];
-            RemoveHotkey(hotkey.Key, hotkey.Modifiers);
+
+            // remove from all dicts:
+            Int32 vkCode = (Int32) hotkey.Key;
+            Keys modifiers = hotkey.Modifiers;
+
+            hotkeys[vkCode].Remove(modifiers);
+            hotkeysToNames.Remove(hotkey);
+            namesToHotkeys.Remove(name);
+            hotkeysForward.Remove(hotkey);                                    
         }
 
         /// <summary>
@@ -394,37 +337,37 @@ namespace LowKey
                     // the virtual key code is the first KBDLLHOOKSTRUCT member:
                     Int32 vkCode = Marshal.ReadInt32(lParam);
 
-                    // check the base key first:
-                    if (hotkeysVkCodes.Contains(vkCode))
+                    // base key matches?
+                    if (hotkeys.ContainsKey(vkCode))
                     {
-                        Keys key = (Keys) vkCode;
                         Keys modifiers = PressedModifiers;
-                        Hotkey hotkey = new Hotkey(key, modifiers);
 
-                        // matches?
-                        if (hotkeys.Contains(hotkey))
+                        // modifiers match?
+                        if (hotkeys[vkCode].Contains(modifiers))
                         {
+                            Keys key = (Keys) vkCode;
+                            Hotkey hotkey = new Hotkey(key, modifiers);
+                            String name = hotkeysToNames[hotkey];
+
                             // override forward with the current hotkey option:
                             forward = hotkeysForward[hotkey];
 
-                            String name = null;
-                            hotkeysToNames.TryGetValue(hotkey, out name);
+                            KeyboardHookEventArgs e = new KeyboardHookEventArgs(name, key, modifiers);
 
-                            KeyboardHookEventArgs args = new KeyboardHookEventArgs(key, modifiers, name);
-
-                            // call the appropriate event handler using the current dispatcher:
+                            // call the appropriate event handler using the
+                            // current dispatcher:
                             if (msg == WM_KEYUP || msg == WM_SYSKEYUP)
                             {
                                 if (HotkeyUp != null)
                                 {
-                                    Dispatcher.CurrentDispatcher.BeginInvoke(HotkeyUp, new Object[] { null, args });
+                                    Dispatcher.CurrentDispatcher.BeginInvoke(HotkeyUp, new Object[] { null, e });
                                 }
                             }
                             else
                             {
                                 if (HotkeyDown != null)
                                 {
-                                    Dispatcher.CurrentDispatcher.BeginInvoke(HotkeyDown, new Object[] { null, args });
+                                    Dispatcher.CurrentDispatcher.BeginInvoke(HotkeyDown, new Object[] { null, e });
                                 }
                             }
                         }
