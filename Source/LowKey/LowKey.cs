@@ -109,7 +109,7 @@ namespace LowKey
         }
 
         ///
-        /// Hooker
+        /// Data
         ///
 
         private struct Hotkey
@@ -136,7 +136,7 @@ namespace LowKey
         }
 
         /// <summary>
-        /// Virtual key code -> set of modifiers for all the hooked hotkeys.
+        /// Virtual key code -> set of modifiers for all the hotkeys.
         /// </summary>
         private static Dictionary<Int32, HashSet<Keys>> hotkeys = 
             new Dictionary<Int32, HashSet<Keys>>();
@@ -171,14 +171,18 @@ namespace LowKey
         /// </summary>
         private static HOOKPROC hookedCallback = Callback;
 
+        ///
+        /// Public interface
+        /// 
+
         /// <summary>
-        /// Add a named hotkey to the hooker.
+        /// Add the specified hotkey to the hooker.
         /// </summary>
         /// <param name="name">
         /// Hotkey name.
         /// </param>
         /// <param name="key">
-        /// Base key that should be pressed to fire an event.
+        /// Base key.
         /// </param>
         /// <param name="modifiers">
         /// A bitwise combination of additional modifiers
@@ -188,7 +192,7 @@ namespace LowKey
         /// Whether the keypress should be forwarded to
         /// other applications.
         /// </param>
-        private static void AddHotkey(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
+        public static void Add(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
         {
             // check name:
             if (name == null)
@@ -202,7 +206,7 @@ namespace LowKey
             // check key code and modifiers:
             Int32 vkCode = (Int32) key;
 
-            // known hotkey:
+            // known base key:
             if (hotkeys.ContainsKey(vkCode))
             {
                 HashSet<Keys> currentModifiers = hotkeys[vkCode];
@@ -221,7 +225,7 @@ namespace LowKey
 
                 currentModifiers.Add(modifiers);
             }
-            // new key:
+            // new base key:
             else
             {
                 hotkeys[vkCode] = new HashSet<Keys>() { modifiers };
@@ -236,12 +240,12 @@ namespace LowKey
         }
 
         /// <summary>
-        /// Remove a hotkey from the hooker.
+        /// Remove the specified hotkey.
         /// </summary>
         /// <param name="name">
         /// Hotkey name that was specified when calling Add().
         /// </param>
-        public static void RemoveHotkey(String name)
+        public static void Remove(String name)
         {
             // check the name:
             if (name == null)
@@ -262,6 +266,39 @@ namespace LowKey
             hotkeysToNames.Remove(hotkey);
             namesToHotkeys.Remove(name);
             hotkeysForward.Remove(hotkey);                                    
+        }
+
+        /// <summary>
+        /// Remove all the registered hotkeys.
+        /// </summary>
+        public static void Clear()
+        {
+            hotkeys.Clear();
+            hotkeysToNames.Clear();
+            namesToHotkeys.Clear();
+            hotkeysForward.Clear();
+        }
+
+        /// <summary>
+        /// Modify a hotkey binding.
+        /// </summary>
+        /// <param name="name">
+        /// Hotkey name that was specified when calling Add().
+        /// </param>
+        /// <param name="key">
+        /// New base key.
+        /// </param>
+        /// <param name="modifiers">
+        /// New modifiers.
+        /// </param>
+        /// <param name="forward">
+        /// Whether the keypress should be forwarded to
+        /// other applications.
+        /// </param>
+        public static void Rebind(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
+        {
+            Remove(name);
+            Add(name, key, modifiers, forward);
         }
 
         /// <summary>
@@ -318,6 +355,10 @@ namespace LowKey
 
             hookID = IntPtr.Zero;
         }
+
+        ///
+        /// Actual hook
+        ///
 
         /// <summary>
         /// Actual callback that intercepts key presses.
@@ -417,7 +458,7 @@ namespace LowKey
         private static extern IntPtr GetModuleHandle(String lpModuleName);
 
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        public static extern Int16 GetAsyncKeyState(Int32 vKey);
+        private static extern Int16 GetAsyncKeyState(Int32 vKey);
     }
 }
 
