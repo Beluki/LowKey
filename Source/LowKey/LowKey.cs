@@ -57,7 +57,7 @@ namespace LowKey
     /// <summary>
     /// The LowKey keyboard hooker.
     /// </summary>
-    public static class KeyboardHook
+    public class KeyboardHook : IDisposable
     {
         ///
         /// Events
@@ -66,12 +66,12 @@ namespace LowKey
         /// <summary>
         /// Fired when a registered hotkey is released.
         /// </summary>
-        public static event EventHandler<KeyboardHookEventArgs> HotkeyUp;
+        public event EventHandler<KeyboardHookEventArgs> HotkeyUp;
 
         /// <summary>
         /// Fired when a registered hotkey is pressed.
         /// </summary>
-        public static event EventHandler<KeyboardHookEventArgs> HotkeyDown;
+        public event EventHandler<KeyboardHookEventArgs> HotkeyDown;
 
         ///
         /// Helpers
@@ -109,7 +109,7 @@ namespace LowKey
         }
 
         ///
-        /// Data
+        /// Private data
         ///
 
         private struct Hotkey
@@ -118,8 +118,7 @@ namespace LowKey
             public readonly Keys Modifiers;
 
             /// <summary>
-            /// Represents a combination of a base key
-            /// and additional modifiers.
+            /// Represents a combination of a base key and additional modifiers.
             /// </summary>
             /// <param name="key">
             /// Base key.
@@ -138,42 +137,93 @@ namespace LowKey
         /// <summary>
         /// Virtual key code -> set of modifiers for all the hotkeys.
         /// </summary>
-        private static Dictionary<Int32, HashSet<Keys>> hotkeys = 
-            new Dictionary<Int32, HashSet<Keys>>();
+        private readonly Dictionary<Int32, HashSet<Keys>> hotkeys;
 
         /// <summary>
         /// A map from hotkeys to names.
         /// </summary>
-        private static Dictionary<Hotkey, String> hotkeysToNames =
-            new Dictionary<Hotkey, String>();
+        private readonly Dictionary<Hotkey, String> hotkeysToNames;
 
         /// <summary>
         /// A map from names to hotkeys.
         /// </summary>
-        private static Dictionary<String, Hotkey> namesToHotkeys =
-            new Dictionary<String, Hotkey>();
+        private readonly Dictionary<String, Hotkey> namesToHotkeys;
 
         /// <summary>
         /// A map from hotkeys to a boolean indicating whether
         /// we should forward the keypress to further applications.
         /// </summary>
-        private static Dictionary<Hotkey, Boolean> hotkeysForward =
-            new Dictionary<Hotkey, Boolean>();
+        private readonly Dictionary<Hotkey, Boolean> hotkeysForward;
+
+        /// <summary>
+        /// Current dispatcher.
+        /// </summary>
+        private readonly Dispatcher dispatcher;
 
         /// <summary>
         /// Hook ID.
         /// Will be IntPtr.Zero when not currently hooked.
         /// </summary>
-        private static IntPtr hookID = IntPtr.Zero;
+        private IntPtr hookID;
 
         /// <summary>
         /// Needed to avoid the delegate being garbage-collected.
         /// </summary>
-        private static HOOKPROC hookedCallback = Callback;
+        private static HOOKPROC hookedCallback;
+
+        /// <summary>
+        /// Hooker instance.
+        /// </summary>
+        private static KeyboardHook instance;
+
+        /// <summary>
+        /// Create a new keyboard hooker instance.
+        /// </summary>
+        private KeyboardHook()
+        {
+            hotkeys = new Dictionary<Int32, HashSet<Keys>>();
+
+            hotkeysToNames = new Dictionary<Hotkey, String>();
+            namesToHotkeys = new Dictionary<String, Hotkey>();
+            hotkeysForward = new Dictionary<Hotkey, Boolean>();
+
+            dispatcher = Dispatcher.CurrentDispatcher;
+            hookID = IntPtr.Zero;
+            hookedCallback = Callback;
+        }
 
         ///
         /// Public interface
-        /// 
+        ///
+
+        /// <summary>
+        /// Get the hooker instance.
+        /// </summary>
+        public static KeyboardHook Hooker
+        {
+            get
+            {
+                if (instance == null)
+                {
+                    instance = new KeyboardHook();
+                }
+
+                return instance;
+            }
+        }
+
+        /// <summary>
+        /// Dispose the hooker.
+        /// </summary>
+        public void Dispose()
+        {
+            if (hookID != IntPtr.Zero)
+            {
+                Unhook();
+            }
+
+            instance = null;
+        }
 
         /// <summary>
         /// Add the specified hotkey to the hooker.
@@ -192,7 +242,7 @@ namespace LowKey
         /// Whether the keypress should be forwarded to
         /// other applications.
         /// </param>
-        public static void Add(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
+        public void Add(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
         {
             // check name:
             if (name == null)
@@ -245,7 +295,7 @@ namespace LowKey
         /// <param name="name">
         /// Hotkey name that was specified when calling Add().
         /// </param>
-        public static void Remove(String name)
+        public void Remove(String name)
         {
             // check the name:
             if (name == null)
@@ -265,13 +315,13 @@ namespace LowKey
             hotkeys[vkCode].Remove(modifiers);
             hotkeysToNames.Remove(hotkey);
             namesToHotkeys.Remove(name);
-            hotkeysForward.Remove(hotkey);                                    
+            hotkeysForward.Remove(hotkey);
         }
 
         /// <summary>
         /// Remove all the registered hotkeys.
         /// </summary>
-        public static void Clear()
+        public void Clear()
         {
             hotkeys.Clear();
             hotkeysToNames.Clear();
@@ -295,7 +345,7 @@ namespace LowKey
         /// Whether the keypress should be forwarded to
         /// other applications.
         /// </param>
-        public static void Rebind(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
+        public void Rebind(String name, Keys key, Keys modifiers = Keys.None, Boolean forward = false)
         {
             Remove(name);
             Add(name, key, modifiers, forward);
@@ -304,7 +354,7 @@ namespace LowKey
         /// <summary>
         /// Start looking for key presses.
         /// </summary>
-        public static void Hook()
+        public void Hook()
         {
             // don't hook twice:
             if (hookID != IntPtr.Zero)
@@ -335,7 +385,7 @@ namespace LowKey
         /// <summary>
         /// Stop looking for key presses.
         /// </summary>
-        public static void Unhook()
+        public void Unhook()
         {
             // not hooked:
             if (hookID == IntPtr.Zero)
@@ -357,13 +407,13 @@ namespace LowKey
         }
 
         ///
-        /// Actual hook
+        /// Actual hooker callback
         ///
 
         /// <summary>
-        /// Actual callback that intercepts key presses.
+        /// Callback that intercepts key presses.
         /// </summary>
-        private static IntPtr Callback(Int32 nCode, IntPtr wParam, IntPtr lParam)
+        private IntPtr Callback(Int32 nCode, IntPtr wParam, IntPtr lParam)
         {
             // assume the hotkey won't match and will be forwarded:
             Boolean forward = true;
@@ -401,14 +451,14 @@ namespace LowKey
                             {
                                 if (HotkeyUp != null)
                                 {
-                                    Dispatcher.CurrentDispatcher.BeginInvoke(HotkeyUp, new Object[] { null, e });
+                                    dispatcher.BeginInvoke(HotkeyUp, new Object[] { null, e });
                                 }
                             }
                             else
                             {
                                 if (HotkeyDown != null)
                                 {
-                                    Dispatcher.CurrentDispatcher.BeginInvoke(HotkeyDown, new Object[] { null, e });
+                                    dispatcher.BeginInvoke(HotkeyDown, new Object[] { null, e });
                                 }
                             }
                         }
