@@ -68,15 +68,16 @@ to other hooks or applications.
 ## Additional notes
 
 LowKey calls event handlers asynchronously but in the thread that created
-the KeyboardHook instance. This makes it possible to forward keypresses
-inmediately, without waiting for event handlers, while still allowing to
-do UI operations in them (if the thread is the UI thread).
+the KeyboardHook instance. It forwards keypresses inmediately, without
+waiting for event handlers, while still allowing to do UI operations in them
+(if the thread is the UI thread).
 
 It also means that event handler exceptions can be caught by the VS debugger.
-All the exceptions LowKey itself raises are of the type `KeyboardHookException`.
+All the exceptions that LowKey itself raises are of the type `KeyboardHookException`
+including those originated in Windows API calls.
 
 Note that for performance reasons (at least on Windows 7 and newer) there is
-a limit on the maximum time a low level hook can wait to respond. Don't block
+a limit on the maximum time a low-level hook can wait to respond. Don't block
 on the event handlers for a long time, use a thread instead.
 
 ## Portability
