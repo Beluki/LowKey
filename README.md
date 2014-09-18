@@ -68,7 +68,7 @@ to other hooks or applications.
 ## Additional notes
 
 LowKey calls event handlers asynchronously but in the thread that created
-the KeyboardHook instance. It forwards keypresses inmediately, without
+the KeyboardHook instance. It forwards keypresses immediately, without
 waiting for event handlers, while still allowing to do UI operations in them
 (if the thread is the UI thread).
 
