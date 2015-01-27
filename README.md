@@ -22,7 +22,7 @@ hooker.Add("Volume up", Keys.Up, Keys.Control | Keys.Shift);
 hooker.Add("Volume down", Keys.Down, Keys.Control | Keys.Shift);
 
 // add an event handler:
-hooker.HotkeyDown += (o, e) => {
+hooker.HotkeyDown += (sender, e) => {
     switch(e.Name)
     {
         case "Volume up":
@@ -44,7 +44,7 @@ hooker.Unhook();
 
 LowKey uses names to identify hotkeys. This makes it easier to write event
 handlers, as there is no need to check what exact key and modifiers were
-pressed. Also, it's possible to rebind hotkeys without event handlers breaking:
+pressed. It's also possible to rebind hotkeys without event handlers breaking:
 
 ```csharp
 // use alt instead of shift:
@@ -87,8 +87,10 @@ It has no external dependencies. Previous versions are not supported.
 
 ## Status
 
-LowKey is feature complete, but it still needs testing. Please, report
-any bugs you may find. I'll update this section once it matures enough.
+This program is finished!
+
+LowKey is feature-complete and has no known bugs. Unless issues are reported
+I plan no further development on it other than maintenance.
 
 ## License
 
