@@ -1,6 +1,10 @@
 
 CHANGELOG
 
+* 2015/01/28:
+
+    - Added IsHooked property.
+
 * 2015/01/27:
 
     - Revised. No outstanding bugs. Working on latest GaGa.
