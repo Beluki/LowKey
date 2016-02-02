@@ -3,9 +3,10 @@
 
 LowKey is a small library that makes it easy to add global hotkeys
 to .NET applications. I wrote it for [GaGa][], a minimal radio player
-for the Windows tray.
+for the Windows tray and for [Yava][], a portable game/emulator launcher.
 
 [GaGa]: https://github.com/Beluki/GaGa
+[Yava]: https://github.com/Beluki/Yava
 
 ## Usage
 
@@ -97,5 +98,5 @@ I plan no further development on it other than maintenance.
 Like all my hobby projects, this is Free Software. See the [Documentation][]
 folder for more information. No warranty though.
 
-[Documentation]: https://github.com/Beluki/LowKey/tree/master/Documentation
+[Documentation]: Documentation
 
